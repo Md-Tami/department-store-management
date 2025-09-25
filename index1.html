@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Department Store Management System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.15/jspdf.plugin.autotable.min.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    
+    <style>
+        body {
+            background-color: #f2f2f2;
+        }
+        
+        .container {
+            margin-top: 20px;
+            padding: 15px;
+        }
+        
+        /* Responsive table */
+        @media screen and (max-width: 600px) {
+            table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+            
+            .container {
+                width: 95%;
+            }
+        }
+
+        /* Hide sections initially */
+        #products, #sales, #departments {
+            display: none;
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #1976d2 0%, #64b5f6 100%);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+
+        nav {
+            margin-bottom: 20px;
+            height: 64px;
+            line-height: 64px;
+        }
+        
+        nav .brand-logo {
+            display: flex;
+            align-items: center;
+            font-size: 1.6rem;
+            font-weight: 400;
+            padding-left: 20px;
+            color: white;
+        }
+        
+        nav .brand-logo i {
+            margin-right: 12px;
+            font-size: 24px;
+        }
+
+        /* Database status indicator */
+        .db-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+        
+        .db-online {
+            background-color: #4caf50;
+            color: white;
+        }
+        
+        .db-offline {
+            background-color: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Database Status Indicator -->
+    <div id="dbStatus" class="db-status db-offline">
+        <i class="material-icons tiny">cloud_off</i> Offline
+    </div>
+
+    <nav>
+        <div class="nav-wrapper gradient-bg">
+            <a href="#" class="brand-logo left">
+                <i class="material-icons">store</i>Department Store Management
+            </a>
+            <a href="#" data-target="mobile-nav" class="sidenav-trigger right">
+                <i class="material-icons">menu</i>
+            </a>
+            <ul id="nav-mobile" class="right hide-on-med-and-down">
+                <li><a href="#employees" class="waves-effect waves-light"><i class="material-icons left">people</i>Employees</a></li>
+                <li><a href="#products" class="waves-effect waves-light"><i class="material-icons left">inventory</i>Products</a></li>
+                <li><a href="#sales" class="waves-effect waves-light"><i class="material-icons left">point_of_sale</i>Sales</a></li>
+                <li><a href="#departments" class="waves-effect waves-light"><i class="material-icons left">business</i>Departments</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Mobile Sidenav -->
+    <ul class="sidenav" id="mobile-nav">
+        <li>
+            <div class="user-view">
+                <div class="background blue darken-2">
+                    <img src="https://materializecss.com/images/office.jpg" style="opacity: 0.5;">
+                </div>
+                <a href="#"><span class="white-text name">Department Store Management</span></a>
+                <a href="#"><span class="white-text email">Dashboard</span></a>
+            </div>
+        </li>
+        <li><a href="#employees" class="sidenav-close"><i class="material-icons">people</i>Employees</a></li>
+        <li><a href="#products" class="sidenav-close"><i class="material-icons">inventory</i>Products</a></li>
+        <li><a href="#sales" class="sidenav-close"><i class="material-icons">point_of_sale</i>Sales</a></li>
+        <li><a href="#departments" class="sidenav-close"><i class="material-icons">business</i>Departments</a></li>
+        <li><div class="divider"></div></li>
+        <li><a class="subheader">Database Actions</a></li>
+        <li><a class="waves-effect" onclick="syncWithDatabase()"><i class="material-icons">sync</i>Sync with Database</a></li>
+        <li><a class="waves-effect" onclick="exportAllData('pdf')"><i class="material-icons">file_download</i>Export PDF</a></li>
+    </ul>
+
+    <div class="container">
+        <div class="input-field col s12">
+            <select id="section-select" onchange="switchSection(this.value)">
+                <option value="employees">Employees</option>
+                <option value="products">Products</option>
+                <option value="sales">Sales</option>
+                <option value="departments">Departments</option>
+            </select>
+            <label>Select Section</label>
+        </div>
+    </div>
+
+    <!-- Sections remain the same as before -->
+    <div id="employees" class="container">
+        <h4>Employee Management</h4>
+        <table class="striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Department</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="employee-tbody">
+                <!-- employee data will be displayed here -->
+            </tbody>
+        </table>
+        <button class="btn" data-target="add-employee-modal" id="add-employee-btn">Add Employee</button>
+    </div>
+
+    <div id="products" class="container">
+        <h4>Product Management</h4>
+        <table class="striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>Department</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="product-tbody">
+                <!-- product data will be displayed here -->
+            </tbody>
+        </table>
+        <button class="btn" data-target="add-product-modal" id="add-product-btn">Add Product</button>
+    </div>
+
+    <div id="sales" class="container">
+        <h4>Sales Management</h4>
+        <table class="striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Product</th>
+                    <th>Sold By</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody id="sale-tbody">
+                <!-- sales data will be displayed here -->
+            </tbody>
+        </table>
+        <button class="btn" data-target="add-sale-modal" id="add-sale-btn">Record Sale</button>
+    </div>
+
+    <div id="departments" class="container">
+        <h4>Department Management</h4>
+        <table class="striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="department-tbody">
+                <!-- department data will be displayed here -->
+            </tbody>
+        </table>
+        <button class="btn" data-target="add-department-modal" id="add-department-btn">Add Department</button>
+    </div>
+
+    <!-- Database Control Buttons -->
+    <div class="container">
+        <div class="row">
+            <div class="col s12 center-align">
+                <button class="btn waves-effect waves-light blue" onclick="syncWithDatabase()">
+                    <i class="material-icons left">sync</i>Sync with Database
+                </button>
+                <button class="btn waves-effect waves-light green" onclick="exportAllData('pdf')">
+                    <i class="material-icons left">file_download</i>Export PDF
+                </button>
+                <button class="btn waves-effect waves-light orange" onclick="clearLocalData()">
+                    <i class="material-icons left">clear</i>Clear Local Data
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals remain the same as before -->
+    <div id="add-employee-modal" class="modal">
+           <div class="modal-content">
+        <h4>Add Employee</h4>
+        <div class="input-field">
+            <input id="employee-name" type="text">
+            <label for="employee-name">Name</label>
+        </div>
+        <div class="input-field">
+            <select id="employee-department">
+                <option value="" disabled selected>Choose Department</option>
+            </select>
+            <label for="employee-department">Department</label>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <a href="#" class="modal-close waves-effect waves-green btn" id="add-employee">Add</a>
+    </div>
+    </div>
+    <div id="add-product-modal" class="modal">
+        <div class="modal-content">
+        <h4>Add Product</h4>
+        <div class="input-field">
+            <input id="product-name" type="text">
+            <label for="product-name">Name</label>
+        </div>
+        <div class="input-field">
+            <input id="product-price" type="number">
+            <label for="product-price">Price</label>
+        </div>
+        <div class="input-field">
+            <select id="product-department">
+                <option value="" disabled selected>Choose Department</option>
+            </select>
+            <label for="product-department">Department</label>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <a href="#" class="modal-close waves-effect waves-green btn" id="add-product">Add</a>
+    </div>
+    </div>
+    <div id="add-sale-modal" class="modal">
+        <div class="modal-content">
+        <h4>Record Sale</h4>
+        <div class="input-field">
+            <select id="sale-product">
+                <option value="" disabled selected>Choose Product</option>
+            </select>
+            <label for="sale-product">Product</label>
+        </div>
+        <div class="input-field">
+            <select id="sale-employee">
+                <option value="" disabled selected>Choose Employee</option>
+            </select>
+            <label for="sale-employee">Employee</label>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <a href="#" class="modal-close waves-effect waves-green btn" id="add-sale">Record</a>
+    </div>
+    </div>
+    <div id="add-department-modal" class="modal">
+         <div class="modal-content">
+        <h4>Add Department</h4>
+        <div class="input-field">
+            <input id="department-name" type="text">
+            <label for="department-name">Name</label>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <a href="#" class="modal-close waves-effect waves-green btn" id="add-department">Add</a>
+    </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script>
+        // ==================== FIREBASE CONFIGURATION ====================
+        // TODO: Replace with your actual Firebase config
+        const firebaseConfig = {
+  apiKey: "AIzaSyDNGRDE92arvkYR5dmtjT-sAPmeVbn2ELA",
+  authDomain: "department-store-management.firebaseapp.com",
+  databaseURL: "https://department-store-management-default-rtdb.firebaseio.com",
+  projectId: "department-store-management",
+  storageBucket: "department-store-management.firebasestorage.app",
+  messagingSenderId: "53395348949",
+  appId: "1:53395348949:web:1b0fa42b16db3a8863315c",
+  measurementId: "G-KNPQFBKTLQ"
+};
+
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // ==================== DATABASE FUNCTIONS ====================
+        function updateDbStatus(online) {
+            const statusElement = document.getElementById('dbStatus');
+            if (online) {
+                statusElement.innerHTML = '<i class="material-icons tiny">cloud_done</i> Online';
+                statusElement.className = 'db-status db-online';
+            } else {
+                statusElement.innerHTML = '<i class="material-icons tiny">cloud_off</i> Offline';
+                statusElement.className = 'db-status db-offline';
+            }
+        }
+
+        // Real-time connection monitoring
+        database.ref('.info/connected').on('value', (snapshot) => {
+            updateDbStatus(snapshot.val() === true);
+        });
+
+        // Save data to Firebase
+        async function saveToDatabase() {
+            try {
+                const storeData = {
+                    employees: employees,
+                    products: products,
+                    sales: sales,
+                    departments: departments,
+                    lastUpdated: new Date().toISOString()
+                };
+                
+                await database.ref('storeData').set(storeData);
+                console.log('Data saved to Firebase successfully');
+                M.toast({html: 'Data saved to cloud!', classes: 'green'});
+            } catch (error) {
+                console.error('Error saving to database:', error);
+                M.toast({html: 'Error saving to cloud!', classes: 'red'});
+            }
+        }
+
+        // Load data from Firebase
+        async function loadFromDatabase() {
+            try {
+                const snapshot = await database.ref('storeData').once('value');
+                const data = snapshot.val();
+                
+                if (data) {
+                    employees = data.employees || [];
+                    products = data.products || [];
+                    sales = data.sales || [];
+                    departments = data.departments || [];
+                    
+                    renderEmployees();
+                    renderProducts();
+                    renderSales();
+                    renderDepartments();
+                    
+                    // Save to localStorage as backup
+                    saveToLocalStorage();
+                    
+                    console.log('Data loaded from Firebase successfully');
+                    M.toast({html: 'Data loaded from cloud!', classes: 'green'});
+                } else {
+                    // If no data in Firebase, try loading from localStorage
+                    loadFromLocalStorage();
+                }
+            } catch (error) {
+                console.error('Error loading from database:', error);
+                M.toast({html: 'Using local data (offline mode)', classes: 'orange'});
+                loadFromLocalStorage();
+            }
+        }
+
+        // Department management
+const addDepartmentBtn = document.getElementById('add-department-btn');
+const addDepartment = document.getElementById('add-department');
+
+addDepartmentBtn.addEventListener('click', () => {
+    M.Modal.getInstance(document.getElementById('add-department-modal')).open();
+});
+
+addDepartment.addEventListener('click', () => {
+    const departmentName = document.getElementById('department-name').value;
+    if (departmentName) {
+        departments.push(departmentName);
+        renderDepartments();
+        saveToDatabase();
+        document.getElementById('department-name').value = '';
+    }
+});
+
+function renderDepartments() {
+    const departmentTbody = document.getElementById('department-tbody');
+    departmentTbody.innerHTML = '';
+    departments.forEach((department, index) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${department}</td>
+            <td>
+                <a href="#" class="delete-department">Delete</a>
+            </td>
+        `;
+        departmentTbody.appendChild(row);
+    });
+
+    // Update department selects
+    const departmentSelects = document.querySelectorAll('#employee-department, #product-department');
+    departmentSelects.forEach(select => {
+        select.innerHTML = '<option value="" disabled selected>Choose Department</option>';
+        departments.forEach(dept => {
+            select.innerHTML += `<option value="${dept}">${dept}</option>`;
+        });
+        M.FormSelect.init(select);
+    });
+}
+
+// Sales management
+const addSaleBtn = document.getElementById('add-sale-btn');
+const addSale = document.getElementById('add-sale');
+
+addSaleBtn.addEventListener('click', () => {
+    M.Modal.getInstance(document.getElementById('add-sale-modal')).open();
+});
+
+addSale.addEventListener('click', () => {
+    const saleProduct = document.getElementById('sale-product').value;
+    const saleEmployee = document.getElementById('sale-employee').value;
+    if (saleProduct && saleEmployee) {
+        const product = products.find(p => p.name === saleProduct);
+        sales.push({ 
+            product: saleProduct, 
+            employee: saleEmployee, 
+            date: new Date().toISOString(),
+            price: product ? product.price : 0,
+            id: Date.now()
+        });
+        renderSales();
+        saveToDatabase();
+        document.getElementById('sale-product').value = '';
+        document.getElementById('sale-employee').value = '';
+    }
+});
+
+function renderSales() {
+    const saleTbody = document.getElementById('sale-tbody');
+    saleTbody.innerHTML = '';
+    sales.forEach((sale, index) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${sale.product}</td>
+            <td>${sale.employee}</td>
+            <td>${new Date(sale.date).toLocaleDateString()}</td>
+        `;
+        saleTbody.appendChild(row);
+    });
+}
+
+// Update dropdowns for sales
+function updateSalesDropdowns() {
+    const productSelect = document.getElementById('sale-product');
+    const employeeSelect = document.getElementById('sale-employee');
+
+    productSelect.innerHTML = '<option value="" disabled selected>Choose Product</option>';
+    products.forEach(product => {
+        productSelect.innerHTML += `<option value="${product.name}">${product.name}</option>`;
+    });
+
+    employeeSelect.innerHTML = '<option value="" disabled selected>Choose Employee</option>';
+    employees.forEach(employee => {
+        employeeSelect.innerHTML += `<option value="${employee.name}">${employee.name}</option>`;
+    });
+
+    M.FormSelect.init(productSelect);
+    M.FormSelect.init(employeeSelect);
+}
+        // Real-time data synchronization
+        function enableRealtimeSync() {
+            database.ref('storeData').on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    employees = data.employees || employees;
+                    products = data.products || products;
+                    sales = data.sales || sales;
+                    departments = data.departments || departments;
+                    
+                    renderEmployees();
+                    renderProducts();
+                    renderSales();
+                    renderDepartments();
+                }
+            });
+        }
+
+        // Manual sync function
+        function syncWithDatabase() {
+            saveToDatabase();
+        }
+
+        // ==================== LOCAL STORAGE FUNCTIONS (BACKUP) ====================
+        function saveToLocalStorage() {
+            const storeData = {
+                employees: employees,
+                products: products,
+                sales: sales,
+                departments: departments,
+                lastUpdated: new Date().toISOString()
+            };
+            localStorage.setItem('departmentStoreData', JSON.stringify(storeData));
+        }
+
+        function loadFromLocalStorage() {
+            const savedData = localStorage.getItem('departmentStoreData');
+            if (savedData) {
+                const data = JSON.parse(savedData);
+                employees = data.employees || [];
+                products = data.products || [];
+                sales = data.sales || [];
+                departments = data.departments || departments;
+                
+                renderEmployees();
+                renderProducts();
+                renderSales();
+                renderDepartments();
+            }
+        }
+
+        function clearLocalData() {
+            if (confirm('Are you sure you want to clear all local data?')) {
+                localStorage.removeItem('departmentStoreData');
+                employees = [];
+                products = [];
+                sales = [];
+                departments = [];
+                
+                renderEmployees();
+                renderProducts();
+                renderSales();
+                renderDepartments();
+                
+                M.toast({html: 'Local data cleared!', classes: 'orange'});
+            }
+        }
+
+        // ==================== APPLICATION INITIALIZATION ====================
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Materialize components
+            const elems = document.querySelectorAll('.modal');
+            M.Modal.init(elems);
+            const selects = document.querySelectorAll('select');
+            M.FormSelect.init(selects);
+            
+            // Initialize default departments
+            departments = [
+                'Electronics',
+                'Clothing',
+                'Home & Kitchen',
+                'Books',
+                'Sports',
+                'Beauty & Personal Care'
+            ];
+            
+            // Initialize sidenav
+            const sidenav = document.querySelectorAll('.sidenav');
+            M.Sidenav.init(sidenav);
+            
+            // Show employees section by default
+            document.getElementById('employees').style.display = 'block';
+            
+            // Load data (first from Firebase, then localStorage as fallback)
+            loadFromDatabase();
+            
+            // Enable real-time synchronization
+            enableRealtimeSync();
+
+            // Add navigation handlers
+            document.querySelectorAll('#nav-mobile a, .sidenav a[href^="#"]').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const sectionId = e.target.closest('a').getAttribute('href').substring(1);
+                    switchSection(sectionId);
+                });
+            });
+        });
+
+        // ==================== EXISTING APPLICATION FUNCTIONS ====================
+        // (Your existing functions for employees, products, sales, departments remain the same)
+        
+        let employees = [];
+        let products = [];
+        let sales = [];
+        let departments = [];
+
+        function switchSection(sectionId) {
+            const sections = ['employees', 'products', 'sales', 'departments'];
+            sections.forEach(section => {
+                document.getElementById(section).style.display = 
+                    section === sectionId ? 'block' : 'none';
+            });
+        }
+
+        // Employee management functions
+        const addEmployeeBtn = document.getElementById('add-employee-btn');
+        const addEmployee = document.getElementById('add-employee');
+
+        addEmployeeBtn.addEventListener('click', () => {
+            M.Modal.getInstance(document.getElementById('add-employee-modal')).open();
+        });
+
+        addEmployee.addEventListener('click', () => {
+            const employeeName = document.getElementById('employee-name').value;
+            const employeeDepartment = document.getElementById('employee-department').value;
+            if (employeeName && employeeDepartment) {
+                employees.push({ 
+                    name: employeeName, 
+                    department: employeeDepartment,
+                    id: Date.now(),
+                    dateAdded: new Date().toISOString()
+                });
+                renderEmployees();
+                saveToDatabase(); // Save to Firebase instead of localStorage
+                document.getElementById('employee-name').value = '';
+                document.getElementById('employee-department').value = '';
+            }
+        });
+
+        function renderEmployees() {
+            const employeeTbody = document.getElementById('employee-tbody');
+            employeeTbody.innerHTML = '';
+            employees.forEach((employee, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${employee.name}</td>
+                    <td>${employee.department}</td>
+                    <td>
+                        <a href="#" class="delete-employee">Delete</a>
+                    </td>
+                `;
+                employeeTbody.appendChild(row);
+            });
+            updateSalesDropdowns();
+        }
+
+        // Similar updates for products, sales, and departments...
+        // (All your existing functions remain the same, just replace saveToLocalStorage() with saveToDatabase())
+
+        // Product management
+        const addProductBtn = document.getElementById('add-product-btn');
+        const addProduct = document.getElementById('add-product');
+
+        addProductBtn.addEventListener('click', () => {
+            M.Modal.getInstance(document.getElementById('add-product-modal')).open();
+        });
+
+        addProduct.addEventListener('click', () => {
+            const productName = document.getElementById('product-name').value;
+            const productPrice = document.getElementById('product-price').value;
+            const productDepartment = document.getElementById('product-department').value;
+            if (productName && productPrice && productDepartment) {
+                products.push({ 
+                    name: productName, 
+                    price: productPrice, 
+                    department: productDepartment,
+                    id: Date.now(),
+                    dateAdded: new Date().toISOString()
+                });
+                renderProducts();
+                saveToDatabase(); // Save to Firebase
+                document.getElementById('product-name').value = '';
+                document.getElementById('product-price').value = '';
+                document.getElementById('product-department').value = '';
+            }
+        });
+
+        function renderProducts() {
+            const productTbody = document.getElementById('product-tbody');
+            productTbody.innerHTML = '';
+            products.forEach((product, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${product.name}</td>
+                    <td>${product.price}</td>
+                    <td>${product.department}</td>
+                    <td>
+                        <a href="#" class="delete-product">Delete</a>
+                    </td>
+                `;
+                productTbody.appendChild(row);
+            });
+            updateSalesDropdowns();
+        }
+
+        // Continue with sales and departments management...
+        // (Your existing code for sales and departments)
+
+        // Delete functionality
+        document.addEventListener('click', function(event) {
+            if (event.target.classList.contains('delete-employee')) {
+                const idx = event.target.closest('tr').rowIndex - 1;
+                employees.splice(idx, 1);
+                renderEmployees();
+                saveToDatabase();
+            } else if (event.target.classList.contains('delete-product')) {
+                const idx = event.target.closest('tr').rowIndex - 1;
+                products.splice(idx, 1);
+                renderProducts();
+                saveToDatabase();
+            } else if (event.target.classList.contains('delete-department')) {
+                const idx = event.target.closest('tr').rowIndex - 1;
+                departments.splice(idx, 1);
+                renderDepartments();
+                saveToDatabase();
+            }
+        });
+
+        // Your existing export functions remain the same...
+    </script>
+</body>
+</html>
